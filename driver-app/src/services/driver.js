@@ -1,29 +1,22 @@
 import API from "./api";
-import axios from "axios";
 
 export const updateLocation = (data) =>
   API.post("/driver/update-location", data);
 
-export const getDriverProfile = async () => {
-  const token = localStorage.getItem("token");
+export const getDriverProfile = () =>
+  API.get("/driver/me");
 
-  return axios.get("http://localhost:5000/api/driver/me", {
-    headers: {
-      Authorization: `Bearer ${token}`
-    }
-  });
-};
+export const getRide = (rideId) =>
+  API.get(`/ride/${rideId}`);
 
-export const setAvailability = async (isAvailable) => {
-  const token = localStorage.getItem("token");
+export const setAvailability = (isAvailable) =>
+  API.post("/driver/set-availability", { isAvailable });
 
-  return axios.post(
-    "http://localhost:5000/api/driver/set-availability",
-    { isAvailable },
-    {
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
-    }
-  );
-};
+export const acceptRide = ({ rideId, driverId }) =>
+  API.post("/ride/accept", { rideId, driverId });
+
+export const startRide = (rideId) =>
+  API.post("/ride/start", { rideId });
+
+export const completeRide = (rideId) =>
+  API.post("/ride/complete", { rideId });

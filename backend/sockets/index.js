@@ -1,64 +1,105 @@
-
 const { getRoute } = require("../utils/route");
+const Ride = require("../modules/ride/ride.model");
+const Driver = require("../modules/driver/driver.model");
+
+const PENDING_RIDE_RADIUS_METERS = Number(process.env.DISPATCH_RADIUS_METERS) || 25000;
 
 module.exports = (io) => {
   io.on("connection", (socket) => {
-    console.log("🟢 Connected:", socket.id);
+    console.log("Socket connected:", socket.id);
 
-    // 🚑 Join ride room (user + hospital)
     socket.on("joinRide", (rideId) => {
+      if (!rideId) return;
       socket.join(rideId);
-      console.log("📥 Joined ride:", rideId);
+      console.log("Joined ride:", rideId);
     });
 
-    // 🧑‍🚒 Driver joins personal room
-    socket.on("joinDriver", (driverId) => {
+    socket.on("joinDriver", async (driverId) => {
+      if (!driverId) return;
       socket.join(driverId);
-      console.log("👤 Driver joined room:", driverId);
+      console.log("Driver joined room:", driverId);
+
+      try {
+        const driver = await Driver.findById(driverId).lean();
+        const coordinates = driver?.location?.coordinates;
+
+        if (!driver?.isAvailable || !coordinates?.length) {
+          return;
+        }
+
+        const pendingRides = await Ride.find({
+          status: "REQUESTED",
+          userLocation: {
+            $near: {
+              $geometry: {
+                type: "Point",
+                coordinates
+              },
+              $maxDistance: PENDING_RIDE_RADIUS_METERS
+            }
+          }
+        })
+          .sort({ createdAt: -1 })
+          .limit(5)
+          .lean();
+
+        pendingRides.forEach((ride) => {
+          const [lng, lat] = ride.userLocation.coordinates;
+
+          socket.emit("newRide", {
+            rideId: ride._id.toString(),
+            ride,
+            location: { lng, lat },
+            replayed: true
+          });
+        });
+      } catch (err) {
+        console.error("Pending ride replay error:", err.message);
+      }
     });
 
-    // 📡 Driver sends live location
-    socket.on("driverLocation", async (data) => {
-      console.log("📡 BACKEND RECEIVED:", data);
-
+    socket.on("driverLocation", async (data = {}) => {
       const { rideId, lat, lng } = data;
 
-      const userLocation = {
-        lat: 12.97,
-        lng: 77.59
-      };
+      if (!rideId || lat === undefined || lng === undefined) {
+        return;
+      }
 
       let eta = null;
       let route = null;
+      let ride = null;
 
       try {
-        const result = await getRoute(
-          { lat, lng },
-          userLocation
-        );
+        ride = await Ride.findById(rideId).populate("driver").lean();
+        const [userLng, userLat] = ride?.userLocation?.coordinates || [];
 
-        eta = result?.eta;
-        route = result?.geometry;
+        if (userLat !== undefined && userLng !== undefined) {
+          const result = await getRoute(
+            { lat: Number(lat), lng: Number(lng) },
+            { lat: userLat, lng: userLng }
+          );
 
-        console.log("⏱ ETA:", eta);
-        console.log("🛣 Route points:", route?.length);
+          eta = result?.eta || null;
+          route = result?.geometry || null;
+        }
       } catch (err) {
-        console.error("ROUTE ERROR:", err.message);
+        console.error("Route lookup error:", err.message);
       }
 
-      console.log("📤 EMITTING TO ROOM:", rideId);
-
       io.to(rideId).emit("driverLocation", {
-        lat,
-        lng,
+        lat: Number(lat),
+        lng: Number(lng),
         eta,
-        route
+        route,
+        rideId,
+        ride: ride || null,
+        status: ride?.status || null,
+        driver: ride?.driver || null
       });
     });
 
     socket.on("disconnect", () => {
-      console.log("🔴 Disconnected:", socket.id);
+      console.log("Socket disconnected:", socket.id);
     });
   });
 };
-

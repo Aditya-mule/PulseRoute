@@ -1,77 +1,114 @@
 const express = require("express");
-const router = express.Router();
 const Driver = require("./driver.model");
 const auth = require("../../shared/middleware/auth");
 
-// ➤ Create driver (for testing)
+const router = express.Router();
+
 router.post("/create", auth, async (req, res) => {
-  const { name, phone, lng, lat } = req.body;
+  try {
+    const { name, phone, lng, lat } = req.body;
 
-  const driver = new Driver({
-    user: req.user.id,   // 🔥 THIS IS THE KEY
-    name,
-    phone,
-    location: {
-      type: "Point",
-      coordinates: [lng, lat]
+    if (!name || !phone || lng === undefined || lat === undefined) {
+      return res.status(400).json({ message: "Name, phone, lng and lat are required" });
     }
-  });
 
-  await driver.save();
+    const driver = await Driver.findOneAndUpdate(
+      { user: req.user.id },
+      {
+        user: req.user.id,
+        name,
+        phone,
+        location: {
+          type: "Point",
+          coordinates: [Number(lng), Number(lat)]
+        }
+      },
+      { returnDocument: "after", upsert: true, runValidators: true }
+    );
 
-  res.json({ driver });
+    return res.status(201).json({ driver });
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
+  }
 });
-// ➤ Get all drivers (debug)
+
 router.get("/all", async (req, res) => {
-  const drivers = await Driver.find();
-  res.json(drivers);
+  try {
+    const drivers = await Driver.find();
+    return res.json(drivers);
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
+  }
 });
 
-// ➤ Update driver location (SECURE)
 router.post("/update-location", auth, async (req, res) => {
-  const { lng, lat } = req.body;
+  try {
+    const { lng, lat } = req.body;
 
-  console.log("REQ USER:", req.user.id); // 👈 debug
+    if (lng === undefined || lat === undefined) {
+      return res.status(400).json({ message: "lng and lat are required" });
+    }
 
-  const driver = await Driver.findOneAndUpdate(
-    { user: req.user.id },
-    {
-      location: {
-        type: "Point",
-        coordinates: [lng, lat]
-      }
-    },
-    { returnDocument: "after" }
-  );
+    const driver = await Driver.findOneAndUpdate(
+      { user: req.user.id },
+      {
+        location: {
+          type: "Point",
+          coordinates: [Number(lng), Number(lat)]
+        }
+      },
+      { returnDocument: "after", runValidators: true }
+    );
 
-  console.log("UPDATED DRIVER:", driver); // 👈 debug
+    if (!driver) {
+      return res.status(404).json({ message: "Driver not found" });
+    }
 
-  res.json({
-    message: "Location updated",
-    driver
-  });
+    return res.json({
+      message: "Location updated",
+      driver
+    });
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
+  }
 });
-// ➤ Toggle availability (SECURE)
+
 router.post("/set-availability", auth, async (req, res) => {
-  const { isAvailable } = req.body;
+  try {
+    const { isAvailable } = req.body;
 
-  const driver = await Driver.findOneAndUpdate(
-    { user: req.user.id },
-    { isAvailable },
-    { returnDocument: "after" }
-  );
+    if (typeof isAvailable !== "boolean") {
+      return res.status(400).json({ message: "isAvailable must be a boolean" });
+    }
 
-  res.json(driver);
+    const driver = await Driver.findOneAndUpdate(
+      { user: req.user.id },
+      { isAvailable },
+      { returnDocument: "after", runValidators: true }
+    );
+
+    if (!driver) {
+      return res.status(404).json({ message: "Driver not found" });
+    }
+
+    return res.json(driver);
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
+  }
 });
 
 router.get("/me", auth, async (req, res) => {
-  const driver = await Driver.findOne({ user: req.user.id });
+  try {
+    const driver = await Driver.findOne({ user: req.user.id });
 
-  if (!driver) {
-    return res.status(404).json({ message: "Driver not found" });
+    if (!driver) {
+      return res.status(404).json({ message: "Driver not found" });
+    }
+
+    return res.json(driver);
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
   }
-
-  res.json(driver);
 });
 
 module.exports = router;

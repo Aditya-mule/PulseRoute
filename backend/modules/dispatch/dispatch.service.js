@@ -1,28 +1,22 @@
 const Driver = require("../driver/driver.model");
 
+const DISPATCH_RADIUS_METERS = Number(process.env.DISPATCH_RADIUS_METERS) || 25000;
+
 const findNearbyDrivers = async (lng, lat) => {
-  try {
-    const drivers = await Driver.find({
-      isAvailable: true,
-      location: {
-        $near: {
-          $geometry: {
-            type: "Point",
-            coordinates: [lng, lat]
-          },
-          $maxDistance: 5000 // 5 km
-        }
+  return Driver.find({
+    isAvailable: true,
+    location: {
+      $near: {
+        $geometry: {
+          type: "Point",
+          coordinates: [lng, lat]
+        },
+        $maxDistance: DISPATCH_RADIUS_METERS
       }
-    })
+    }
+  })
     .limit(5)
-    .lean(); // ✅ faster
-
-    return drivers;
-
-  } catch (err) {
-    console.error("Driver search error:", err.message);
-    return [];
-  }
+    .lean();
 };
 
 module.exports = { findNearbyDrivers };

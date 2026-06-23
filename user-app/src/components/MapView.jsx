@@ -8,9 +8,7 @@ import {
 import { useEffect, useState } from "react";
 import L from "leaflet";
 import { useMap } from "react-leaflet";
-import { getRoute } from "../services/route";
 
-// Fix marker icon
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
   iconRetinaUrl:
@@ -21,19 +19,16 @@ L.Icon.Default.mergeOptions({
     "https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png",
 });
 
-// 🚑 Smooth moving marker
 function SmoothMarker({ location }) {
   const [pos, setPos] = useState(location);
   const map = useMap();
 
-  // auto pan map
   useEffect(() => {
     if (pos) {
       map.panTo([pos.lat, pos.lng]);
     }
   }, [pos, map]);
 
-  // smooth animation
   useEffect(() => {
     if (!location) return;
 
@@ -55,46 +50,20 @@ function SmoothMarker({ location }) {
 
   return (
     <Marker position={[pos.lat, pos.lng]}>
-      <Popup>🚑 Driver</Popup>
+      <Popup>Ambulance</Popup>
     </Marker>
   );
 }
 
-// 🗺️ Main Map Component
-export default function MapView({ location }) {
-  const user = { lat: 12.97, lng: 77.59 };
+export default function MapView({ location, ride }) {
+  const coords = ride?.userLocation?.coordinates;
+  const user = coords
+    ? { lat: coords[1], lng: coords[0] }
+    : { lat: 12.97, lng: 77.59 };
 
-  const [routeCoords, setRouteCoords] = useState([]);
-  const [eta, setEta] = useState(null);
-
-  // 🔥 Fetch real route from OSRM
-  useEffect(() => {
-    if (!location) return;
-
-    const fetchRoute = async () => {
-      try {
-        const route = await getRoute(
-          { lat: location.lat, lng: location.lng },
-          user
-        );
-
-        // convert GeoJSON → leaflet format
-        const coords = route.geometry.coordinates.map((c) => [
-          c[1],
-          c[0]
-        ]);
-
-        setRouteCoords(coords);
-
-        // ETA in minutes
-        setEta((route.duration / 60).toFixed(1));
-      } catch (err) {
-        console.error("Route fetch error:", err);
-      }
-    };
-
-    fetchRoute();
-  }, [location]);
+  const routeCoords = location?.route
+    ? location.route.map(([lng, lat]) => [lat, lng])
+    : [];
 
   return (
     <div className="space-y-2">
@@ -105,10 +74,12 @@ export default function MapView({ location }) {
       >
         <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
 
-        {/* Smooth Driver Marker */}
-        <SmoothMarker location={location} />
+        <Marker position={[user.lat, user.lng]}>
+          <Popup>Pickup</Popup>
+        </Marker>
 
-        {/* Real Route Line */}
+        {location && <SmoothMarker location={location} />}
+
         {routeCoords.length > 0 && (
           <Polyline
             positions={routeCoords}
@@ -117,10 +88,9 @@ export default function MapView({ location }) {
         )}
       </MapContainer>
 
-      {/* ETA Display */}
-      {eta && (
+      {location?.eta && (
         <div className="bg-white shadow-md p-3 rounded-xl text-center text-sm">
-          ⏱️ ETA: <span className="font-semibold">{eta} min</span>
+          ETA: <span className="font-semibold">{location.eta} min</span>
         </div>
       )}
     </div>

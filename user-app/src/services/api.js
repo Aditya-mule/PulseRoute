@@ -5,3 +5,5 @@ const API = axios.create({
 });
 
 export const requestRide = (data) => API.post("/ride/request", data);
+
+export const getRide = (rideId) => API.get(`/ride/${rideId}`);

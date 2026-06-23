@@ -28,7 +28,7 @@ function AutoCenter({ location }) {
     if (location) {
       map.setView([location.lat, location.lng], 15);
     }
-  }, [location]);
+  }, [location, map]);
 
   return null;
 }
